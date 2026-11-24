@@ -18,6 +18,8 @@ let currentUser;
 let currentUserName = "";
 let contacts = [];
 let callLogs = [];
+let expandedContactIds = new Set();
+let callNoteDrafts = new Map();
 
 function show(element, message) {
   if (!element) return;
@@ -271,6 +273,8 @@ function renderContacts() {
 
     const card = document.createElement("article");
     card.className = "contact-card";
+    const row = document.createElement("div");
+    row.className = "contact-card-row";
 
     const avatar = document.createElement("span");
     avatar.className = "avatar";
@@ -281,13 +285,65 @@ function renderContacts() {
 
     const info = document.createElement("div");
     info.className = "contact-info";
-    const name = document.createElement("p");
+    let calledMarker;
+    if (page === "user") {
+      calledMarker = document.createElement("label");
+      calledMarker.className = "contact-called-marker";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = Boolean(contact.called_by_initial);
+      checkbox.setAttribute(
+        "aria-label",
+        contact.called_by_initial
+          ? "Ligação assinalada por " + contact.called_by_initial + ". Desmarcar " + contact.name
+          : "Assinalar que ligou a " + contact.name
+      );
+      const mark = document.createElement("span");
+      mark.setAttribute("aria-hidden", "true");
+      mark.textContent = contact.called_by_initial || "";
+      calledMarker.append(checkbox, mark);
+      checkbox.addEventListener("change", () => setContactCallMark(contact, checkbox));
+    }
+
+    const name = document.createElement(page === "user" ? "span" : "p");
     name.className = "contact-name";
     name.textContent = contact.name;
-    const phone = document.createElement("p");
+    const phone = document.createElement(page === "user" ? "span" : "p");
     phone.className = "contact-phone";
     phone.textContent = contact.phone;
-    info.append(name, phone);
+    let contactActivity;
+    if (page === "user") {
+      const detailsToggle = document.createElement("button");
+      detailsToggle.type = "button";
+      detailsToggle.className = "contact-details-toggle";
+      detailsToggle.setAttribute("aria-controls", "contact-activity-" + contact.id);
+      detailsToggle.setAttribute("aria-expanded", String(expandedContactIds.has(contact.id)));
+      detailsToggle.setAttribute("aria-label", "Mostrar chamadas e lembretes de " + contact.name);
+      const nameRow = document.createElement("span");
+      nameRow.className = "contact-name-row";
+      const indicator = document.createElement("span");
+      indicator.className = "contact-expand-icon";
+      indicator.setAttribute("aria-hidden", "true");
+      indicator.textContent = expandedContactIds.has(contact.id) ? "−" : "+";
+      nameRow.append(name, indicator);
+      detailsToggle.append(nameRow, phone);
+      detailsToggle.addEventListener("click", () => {
+        if (expandedContactIds.has(contact.id)) {
+          expandedContactIds.delete(contact.id);
+        } else {
+          expandedContactIds.add(contact.id);
+        }
+        renderCallActivity();
+      });
+      info.append(detailsToggle);
+
+      contactActivity = document.createElement("div");
+      contactActivity.className = "contact-activity";
+      contactActivity.id = "contact-activity-" + contact.id;
+      contactActivity.dataset.contactId = contact.id;
+    } else {
+      info.append(name, phone);
+    }
 
     const actions = document.createElement("div");
     actions.className = "contact-actions";
@@ -331,7 +387,10 @@ function renderContacts() {
       actions.append(edit, remove);
     }
 
-    card.append(avatar, info, actions);
+    if (calledMarker) row.append(calledMarker);
+    row.append(avatar, info, actions);
+    card.append(row);
+    if (contactActivity) card.append(contactActivity);
     groupList.append(card);
   });
 
@@ -341,22 +400,48 @@ function renderContacts() {
     : contacts.length + (contacts.length === 1 ? " contacto" : " contactos");
   empty.hidden = contacts.length > 0;
   noResults.hidden = contacts.length === 0 || filtered.length > 0;
+  if (page === "user") renderCallActivity();
 }
 
 async function refreshContacts() {
   hide(pageError);
   const { data, error } = await supabase
     .from("contacts")
-    .select("id, name, phone, contact_year")
+    .select("id, name, phone, contact_year, called_by_initial")
     .order("contact_year", { ascending: true, nullsFirst: false })
     .order("name", { ascending: true });
   if (error) {
     console.error("Não foi possível carregar os contactos.", error);
-    showPageError("Não foi possível carregar os contactos. Tente novamente mais tarde.");
+    const schemaUpdateRequired = error.code === "PGRST204" || error.code === "42703";
+    document.querySelector("#contact-count").textContent = schemaUpdateRequired
+      ? "Atualização do Supabase necessária"
+      : "Não foi possível carregar os contactos";
+    showPageError(schemaUpdateRequired
+      ? "Execute o supabase-schema.sql atualizado no Supabase para ativar a marcação partilhada."
+      : "Não foi possível carregar os contactos. Tente novamente mais tarde.");
     return;
   }
   contacts = data;
   renderContacts();
+}
+
+async function setContactCallMark(contact, checkbox) {
+  const previousState = Boolean(contact.called_by_initial);
+  checkbox.disabled = true;
+  const { error } = await supabase.rpc("set_contact_call_mark", {
+    target_contact_id: contact.id,
+    is_called: checkbox.checked
+  });
+  if (error) {
+    console.error("Não foi possível guardar a marcação da chamada.", error);
+    checkbox.checked = previousState;
+    checkbox.disabled = false;
+    showPageError(error.code === "PGRST202"
+      ? "Execute o supabase-schema.sql atualizado no Supabase para ativar a marcação partilhada."
+      : "Não foi possível guardar a marcação. Tente novamente.");
+    return;
+  }
+  await refreshContacts();
 }
 
 function formatDateTime(value) {
@@ -400,6 +485,7 @@ async function startCall(contact) {
   }
 
   callLogs.unshift(data);
+  if (data.contact_id) expandedContactIds.add(data.contact_id);
   renderCallActivity();
   window.location.href = "tel:" + contact.phone.replace(/[^\d+]/g, "");
 }
@@ -421,146 +507,148 @@ async function refreshCallHistory() {
 }
 
 function renderCallActivity() {
-  const remindersList = document.querySelector("#reminders-list");
-  const historyList = document.querySelector("#call-history");
-  if (!remindersList || !historyList) return;
-
-  const pendingReminders = callLogs
-    .filter((log) => log.outcome === "no_answer" && !log.reminder_completed_at)
-    .sort((a, b) => new Date(a.reminder_at) - new Date(b.reminder_at));
+  if (page !== "user") return;
   const now = Date.now();
-  remindersList.replaceChildren();
-  pendingReminders.forEach((log) => {
-    const due = new Date(log.reminder_at).getTime() <= now;
-    const card = document.createElement("article");
-    card.className = "reminder-card" + (due ? " is-due" : "");
+  document.querySelectorAll(".contact-activity").forEach((activity) => {
+    const contactId = activity.dataset.contactId;
+    const expanded = expandedContactIds.has(contactId);
+    const toggle = activity.parentElement.querySelector(".contact-details-toggle");
+    const indicator = toggle.querySelector(".contact-expand-icon");
+    const contactName = toggle.querySelector(".contact-name").textContent;
+    activity.hidden = !expanded;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.setAttribute("aria-label", (expanded ? "Ocultar" : "Mostrar") + " chamadas e lembretes de " + contactName);
+    indicator.textContent = expanded ? "−" : "+";
+    if (!expanded) return;
 
-    const main = document.createElement("div");
-    main.className = "activity-main";
-    const name = document.createElement("p");
-    name.className = "activity-name";
-    name.textContent = log.contact_name;
-    const meta = document.createElement("p");
-    meta.className = "activity-meta";
-    meta.textContent = log.phone + " · " + (due ? "Já pode voltar a ligar" : "Lembrete para " + formatDateTime(log.reminder_at));
-    const note = document.createElement("p");
-    note.className = "activity-note";
-    note.textContent = "Obs.: " + (log.note || "Não atendeu. Voltar a ligar.") + (due ? "" : " · " + formatDateTime(log.reminder_at));
-    main.append(name, meta, note);
+    const contactLogs = callLogs.filter((log) => log.contact_id === contactId);
+    const pendingReminders = contactLogs.filter((log) => log.outcome === "no_answer" && !log.reminder_completed_at);
+    const heading = document.createElement("div");
+    heading.className = "contact-activity-heading";
+    const title = document.createElement("h4");
+    title.textContent = "Chamadas e lembretes";
+    const count = document.createElement("span");
+    count.className = "contact-activity-count";
+    count.textContent = contactLogs.length + (contactLogs.length === 1 ? " chamada" : " chamadas");
+    if (pendingReminders.length > 0) {
+      count.textContent += " · " + pendingReminders.length + (pendingReminders.length === 1 ? " lembrete" : " lembretes");
+    }
+    heading.append(title, count);
+    activity.replaceChildren(heading);
 
-    const actions = document.createElement("div");
-    actions.className = "activity-actions";
-    actions.append(
-      activityButton("Ligar novamente", "primary", () => startCall(log)),
-      activityButton("Concluir", "", () => completeReminder(log.id))
-    );
-    card.append(main, actions);
-    remindersList.append(card);
+    if (contactLogs.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "contact-activity-empty";
+      empty.textContent = "Ainda não há chamadas registadas para este contacto.";
+      activity.append(empty);
+      return;
+    }
+
+    contactLogs.forEach((log) => {
+      const item = document.createElement("article");
+      item.className = "history-item";
+      const symbol = document.createElement("span");
+      symbol.className = "history-symbol";
+      symbol.setAttribute("aria-hidden", "true");
+      symbol.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7.2 3.5 4.8 4.7a2 2 0 0 0-1 2.2c1.4 6.7 6.6 11.9 13.3 13.3a2 2 0 0 0 2.2-1l1.2-2.4-4.1-2.3-2 2a14 14 0 0 1-5.9-5.9l2-2-2.3-4.1Z"></path></svg>';
+
+      const main = document.createElement("div");
+      main.className = "activity-main";
+      const titleRow = document.createElement("div");
+      titleRow.className = "history-title-row";
+      const outcomeControl = document.createElement("div");
+      outcomeControl.className = "call-outcome-control";
+      let noteInput;
+      if (log.outcome === "calling") {
+        outcomeControl.classList.add("call-outcome-choices");
+        noteInput = document.createElement("textarea");
+        noteInput.className = "call-note-input";
+        noteInput.rows = 2;
+        noteInput.maxLength = 1000;
+        noteInput.value = callNoteDrafts.get(log.id) || "";
+        noteInput.placeholder = "Observações desta chamada (opcional)";
+        noteInput.setAttribute("aria-label", "Observações da chamada a " + log.contact_name);
+        noteInput.addEventListener("input", () => callNoteDrafts.set(log.id, noteInput.value));
+
+        const answered = document.createElement("button");
+        answered.type = "button";
+        answered.className = "call-outcome-choice is-answered";
+        answered.textContent = "✓";
+        answered.title = "Atendeu";
+        answered.setAttribute("aria-label", "Marcar chamada a " + log.contact_name + " como atendida");
+        answered.addEventListener("click", () => setCallOutcome(log.id, "answered", noteInput.value));
+
+        const noAnswer = document.createElement("button");
+        noAnswer.type = "button";
+        noAnswer.className = "call-outcome-choice is-no-answer";
+        noAnswer.textContent = "×";
+        noAnswer.title = "Não atendeu";
+        noAnswer.setAttribute("aria-label", "Marcar chamada a " + log.contact_name + " como não atendida");
+        noAnswer.addEventListener("click", () => setCallOutcome(log.id, "no_answer", noteInput.value));
+        outcomeControl.append(answered, noAnswer);
+      } else {
+        const mark = document.createElement("span");
+        mark.className = "call-outcome-mark " + (log.outcome === "answered" ? "is-answered" : "is-no-answer");
+        mark.textContent = log.outcome === "answered" ? "✓" : "×";
+        mark.setAttribute("aria-label", log.outcome === "answered" ? "Atendida" : "Não atendeu");
+        outcomeControl.append(mark);
+      }
+
+      const status = document.createElement("span");
+      status.className = "history-status";
+      const reminderDue = log.outcome === "no_answer" && new Date(log.reminder_at).getTime() <= now;
+      status.textContent = log.outcome === "answered"
+        ? "Atendida"
+        : log.outcome === "no_answer"
+          ? log.reminder_completed_at
+            ? "Não atendeu · lembrete concluído"
+            : reminderDue
+              ? "Não atendeu · lembrete pronto"
+              : "Não atendeu · lembrete pendente"
+          : "Indique se atendeu";
+      if (log.outcome === "answered") status.classList.add("is-answered");
+      if (log.outcome === "no_answer") status.classList.add("is-no-answer");
+      titleRow.append(outcomeControl, status);
+
+      const meta = document.createElement("p");
+      meta.className = "activity-meta";
+      meta.textContent = formatDateTime(log.attempted_at) + " · " + currentUserName;
+      main.append(titleRow, meta);
+
+      if (log.outcome === "no_answer") {
+        const note = document.createElement("p");
+        note.className = "activity-note";
+        const reminderText = log.reminder_completed_at
+          ? "Lembrete concluído"
+          : reminderDue
+            ? "Já pode voltar a ligar"
+            : "Lembrete para " + formatDateTime(log.reminder_at);
+        note.textContent = "Obs.: " + (log.note || "Não atendeu. Voltar a ligar.") + " · " + reminderText;
+        main.append(note);
+
+        if (!log.reminder_completed_at) {
+          const actions = document.createElement("div");
+          actions.className = "activity-actions";
+          actions.append(
+            activityButton("Ligar novamente", "primary", () => startCall(log)),
+            activityButton("Concluir lembrete", "", () => completeReminder(log.id))
+          );
+          main.append(actions);
+        }
+      }
+
+      if (log.outcome === "answered" && log.note && log.note !== "Chamada atendida.") {
+        const note = document.createElement("p");
+        note.className = "activity-note";
+        note.textContent = "Obs.: " + log.note;
+        main.append(note);
+      }
+      if (noteInput) main.append(noteInput);
+
+      item.append(symbol, main);
+      activity.append(item);
+    });
   });
-
-  const remindersEmpty = document.querySelector("#reminders-empty");
-  const remindersCount = document.querySelector("#reminders-count");
-  remindersEmpty.hidden = pendingReminders.length > 0;
-  const dueCount = pendingReminders.filter((log) => new Date(log.reminder_at).getTime() <= now).length;
-  remindersCount.textContent = pendingReminders.length === 0
-    ? "Sem lembretes pendentes"
-    : dueCount > 0
-      ? dueCount + (dueCount === 1 ? " lembrete pronto" : " lembretes prontos") + " · " + pendingReminders.length + " pendentes"
-      : pendingReminders.length + (pendingReminders.length === 1 ? " lembrete pendente" : " lembretes pendentes");
-
-  historyList.replaceChildren();
-  callLogs.forEach((log) => {
-    const item = document.createElement("article");
-    item.className = "history-item";
-    const symbol = document.createElement("span");
-    symbol.className = "history-symbol";
-    symbol.setAttribute("aria-hidden", "true");
-    symbol.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7.2 3.5 4.8 4.7a2 2 0 0 0-1 2.2c1.4 6.7 6.6 11.9 13.3 13.3a2 2 0 0 0 2.2-1l1.2-2.4-4.1-2.3-2 2a14 14 0 0 1-5.9-5.9l2-2-2.3-4.1Z"></path></svg>';
-
-    const main = document.createElement("div");
-    main.className = "activity-main";
-    const titleRow = document.createElement("div");
-    titleRow.className = "history-title-row";
-    const name = document.createElement("p");
-    name.className = "activity-name";
-    name.textContent = log.contact_name;
-    const outcomeControl = document.createElement("div");
-    outcomeControl.className = "call-outcome-control";
-    let noteInput;
-    if (log.outcome === "calling") {
-      outcomeControl.classList.add("call-outcome-choices");
-      noteInput = document.createElement("textarea");
-      noteInput.className = "call-note-input";
-      noteInput.rows = 2;
-      noteInput.maxLength = 1000;
-      noteInput.placeholder = "Observações desta chamada (opcional)";
-      noteInput.setAttribute("aria-label", "Observações da chamada a " + log.contact_name);
-
-      const answered = document.createElement("button");
-      answered.type = "button";
-      answered.className = "call-outcome-choice is-answered";
-      answered.textContent = "✓";
-      answered.title = "Atendeu";
-      answered.setAttribute("aria-label", "Marcar chamada a " + log.contact_name + " como atendida");
-      answered.addEventListener("click", () => setCallOutcome(log.id, "answered", noteInput.value));
-
-      const noAnswer = document.createElement("button");
-      noAnswer.type = "button";
-      noAnswer.className = "call-outcome-choice is-no-answer";
-      noAnswer.textContent = "×";
-      noAnswer.title = "Não atendeu";
-      noAnswer.setAttribute("aria-label", "Marcar chamada a " + log.contact_name + " como não atendida");
-      noAnswer.addEventListener("click", () => setCallOutcome(log.id, "no_answer", noteInput.value));
-      outcomeControl.append(answered, noAnswer);
-    } else {
-      const mark = document.createElement("span");
-      mark.className = "call-outcome-mark " + (log.outcome === "answered" ? "is-answered" : "is-no-answer");
-      mark.textContent = log.outcome === "answered" ? "✓" : "×";
-      mark.setAttribute("aria-label", log.outcome === "answered" ? "Atendida" : "Não atendeu");
-      outcomeControl.append(mark);
-    }
-    titleRow.append(outcomeControl, name);
-    const meta = document.createElement("p");
-    meta.className = "activity-meta";
-    meta.textContent = log.phone + " · " + formatDateTime(log.attempted_at) + " · " + currentUserName;
-    const status = document.createElement("span");
-    status.className = "history-status";
-    status.textContent = log.outcome === "answered"
-      ? "Atendida"
-      : log.outcome === "no_answer"
-        ? "Não atendeu"
-        : "Tentativa registada · indique o resultado";
-    if (log.outcome === "answered") status.classList.add("is-answered");
-    if (log.outcome === "no_answer") status.classList.add("is-no-answer");
-    main.append(titleRow, meta, status);
-
-    if (log.outcome === "no_answer") {
-      const note = document.createElement("p");
-      note.className = "activity-note";
-      note.textContent = "Obs.: " + (log.note || "Não atendeu. Voltar a ligar.") +
-        " · Lembrete para " + formatDateTime(log.reminder_at) +
-        (log.reminder_completed_at ? " · Lembrete concluído" : "");
-      main.append(note);
-    }
-
-    if (log.outcome === "answered" && log.note && log.note !== "Chamada atendida.") {
-      const note = document.createElement("p");
-      note.className = "activity-note";
-      note.textContent = "Obs.: " + log.note;
-      main.append(note);
-    }
-    if (noteInput) main.append(noteInput);
-
-    item.append(symbol, main);
-    historyList.append(item);
-  });
-
-  const historyEmpty = document.querySelector("#history-empty");
-  const historyCount = document.querySelector("#history-count");
-  historyEmpty.hidden = callLogs.length > 0;
-  historyCount.textContent = callLogs.length === 0
-    ? "Ainda sem chamadas registadas"
-    : callLogs.length + (callLogs.length === 1 ? " chamada registada" : " chamadas registadas");
 }
 
 async function setCallOutcome(callId, outcome, note = "") {
@@ -575,6 +663,7 @@ async function setCallOutcome(callId, outcome, note = "") {
     showPageError("Não foi possível guardar o resultado da chamada. Tente novamente.");
     return;
   }
+  callNoteDrafts.delete(callId);
   await refreshCallHistory();
 }
 

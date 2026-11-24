@@ -176,12 +176,15 @@ h1 span { color: var(--brick); }
 .contact-year-list .contact-card:first-child { border-top: 0; }
 
 .contact-card {
-  display: flex;
-  min-height: 72px;
-  align-items: center;
-  gap: 13px;
   padding: 11px 3px;
   border-bottom: 1px solid #ededed;
+}
+
+.contact-card-row {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 13px;
 }
 
 .contact-card:last-child { border-bottom: 0; }
@@ -203,6 +206,24 @@ h1 span { color: var(--brick); }
 .contact-info { min-width: 0; flex: 1; }
 .contact-name { overflow: hidden; margin: 0 0 4px; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .contact-phone { margin: 0; color: var(--muted); font-size: 12px; }
+.contact-called-marker { position: relative; display: grid; width: 23px; height: 23px; flex: 0 0 23px; place-items: center; cursor: pointer; }
+.contact-called-marker input { position: absolute; width: 22px; height: 22px; margin: 0; opacity: 0; cursor: pointer; }
+.contact-called-marker span { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #d8d8d8; border-radius: 6px; background: #fff; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
+.contact-called-marker input:checked + span { border-color: var(--brick); background: var(--brick); }
+.contact-called-marker:hover span { border-color: var(--brick); }
+.contact-called-marker input:focus-visible + span { outline: 2px solid var(--brick); outline-offset: 2px; }
+.contact-details-toggle { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.contact-details-toggle:focus-visible { outline: 2px solid var(--brick); outline-offset: 3px; border-radius: 4px; }
+.contact-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.contact-name-row .contact-name { min-width: 0; flex: 1; margin: 0; }
+.contact-expand-icon { display: grid; width: 20px; height: 20px; flex: 0 0 20px; place-items: center; border-radius: 6px; background: #ededed; color: #626262; font-size: 14px; line-height: 1; }
+.contact-details-toggle:hover .contact-expand-icon { background: #e1e1e1; }
+.contact-activity { margin: 11px 0 0 56px; padding-top: 10px; border-top: 1px solid #ededed; }
+.contact-activity-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+.contact-activity-heading h4 { margin: 0; font-size: 11px; font-weight: 600; }
+.contact-activity-count, .contact-activity-empty { color: var(--muted); font-size: 10px; }
+.contact-activity-count { text-align: right; }
+.contact-activity-empty { margin: 0; line-height: 1.5; }
 
 .contact-actions { display: flex; align-items: center; gap: 7px; }
 
@@ -296,13 +317,8 @@ h1 span { color: var(--brick); }
 .text-button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: white; color: #626262; font-size: 11px; font-weight: 600; }
 .text-button:hover { border-color: #d0d0d0; background: #f8f8f8; }
 .admin-panel { margin-bottom: 18px; }
-.activity-panel { min-height: 0; margin-top: 18px; }
-.empty-activity { padding: 17px 4px 4px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.reminder-card, .history-item { padding: 15px 3px; border-top: 1px solid #ededed; }
-.reminder-card { display: flex; align-items: center; gap: 14px; }
-.reminder-card.is-due { margin-top: 9px; padding: 14px; border: 1px solid #e7c4b8; border-radius: 11px; background: #fbf0ec; }
+.history-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-top: 1px solid #ededed; }
 .activity-main { min-width: 0; flex: 1; }
-.activity-name { margin: 0 0 5px; font-size: 13px; font-weight: 600; }
 .activity-meta { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .activity-note { margin: 6px 0 0; color: var(--brick-dark); font-size: 11px; line-height: 1.5; }
 .activity-actions { display: flex; align-items: center; gap: 7px; }
@@ -310,11 +326,10 @@ h1 span { color: var(--brick); }
 .activity-button:hover { border-color: #d1a193; background: #fbefeb; }
 .activity-button.primary { border-color: var(--brick); background: var(--brick); color: #fff; }
 .activity-button.primary:hover { background: var(--brick-dark); }
-.history-item { display: flex; align-items: flex-start; gap: 12px; }
 .history-symbol { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 11px; background: var(--brick-soft); color: var(--brick-dark); }
 .history-symbol svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
-.history-title-row { display: flex; min-width: 0; align-items: center; gap: 9px; margin-bottom: 5px; }
-.history-title-row .activity-name { min-width: 0; flex: 1; overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; }
+.history-title-row { display: flex; min-width: 0; align-items: center; gap: 8px; margin-bottom: 5px; }
+.history-title-row .history-status { margin-top: 0; }
 .call-outcome-control { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; }
 .call-outcome-choice, .call-outcome-mark { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border: 1px solid #d8d8d8; border-radius: 8px; background: #fff; font: inherit; font-size: 16px; font-weight: 700; line-height: 1; }
 .call-outcome-choice { cursor: pointer; }
@@ -326,6 +341,8 @@ h1 span { color: var(--brick); }
 .call-note-input { display: block; width: 100%; min-height: 58px; margin-top: 10px; padding: 9px 10px; resize: vertical; border: 1px solid #e2e2e2; border-radius: 8px; outline: 0; background: #fff; color: var(--ink); font: inherit; font-size: 11px; }
 .call-note-input:focus { border-color: #bb755f; box-shadow: 0 0 0 3px rgba(132, 45, 22, .1); }
 .call-note-input::placeholder { color: #999; }
+.contact-activity .activity-actions { flex-wrap: wrap; margin-top: 8px; }
+.contact-activity .activity-button { min-height: 31px; padding: 0 9px; }
 .history-status { display: inline-block; margin-top: 7px; padding: 4px 7px; border-radius: 20px; background: #ededed; color: #626262; font-size: 9px; font-weight: 600; }
 .history-status.is-answered { background: var(--brick-soft); color: var(--brick-dark); }
 .history-status.is-no-answer { background: #e8e8e8; color: #626262; }
@@ -348,15 +365,12 @@ h1 span { color: var(--brick); }
   .section-heading h2 { font-size: 16px; }
   .add-button { min-height: 38px; padding: 0 12px; }
   .search-box kbd { display: none; }
-  .contact-card { gap: 10px; }
+  .contact-card-row { gap: 10px; }
   .avatar { width: 40px; height: 40px; flex-basis: 40px; border-radius: 13px; }
+  .contact-activity { margin-left: 50px; }
   .call-button, .sms-button, .delete-button { width: 36px; height: 36px; flex-basis: 36px; }
   .contact-actions { gap: 3px; }
   .footer { padding-top: 15px; font-size: 9px; }
-  .reminder-card { align-items: flex-start; gap: 9px; }
-  .reminder-card.is-due { padding: 11px; }
-  .reminder-card .activity-actions { flex-direction: column; align-items: stretch; }
-  .reminder-card .activity-button { padding: 0 8px; }
   .history-item { gap: 9px; }
 }
 

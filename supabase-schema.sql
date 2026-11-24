@@ -45,6 +45,12 @@ alter table public.contacts
   add constraint contacts_contact_year_check
   check (contact_year is null or contact_year between 1 and 9999);
 
+alter table public.contacts add column if not exists called_by_initial text;
+alter table public.contacts drop constraint if exists contacts_called_by_initial_check;
+alter table public.contacts
+  add constraint contacts_called_by_initial_check
+  check (called_by_initial is null or char_length(btrim(called_by_initial)) = 1);
+
 create table if not exists public.call_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -275,6 +281,49 @@ $$;
 
 revoke all on function public.set_call_outcome(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.set_call_outcome(uuid, text, text) to authenticated;
+
+create or replace function public.set_contact_call_mark(target_contact_id uuid, is_called boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_initial text;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+
+  if is_called is null then
+    raise exception 'Invalid call mark';
+  end if;
+
+  if is_called then
+    select pg_catalog.upper(
+      pg_catalog.left(coalesce(nullif(pg_catalog.btrim(profile.name), ''), 'U'), 1)
+    )
+    into caller_initial
+    from public.profiles as profile
+    where profile.id = (select auth.uid());
+
+    if caller_initial is null then
+      raise exception 'Profile not found';
+    end if;
+  end if;
+
+  update public.contacts
+  set called_by_initial = case when is_called then caller_initial else null end
+  where id = target_contact_id;
+
+  if not found then
+    raise exception 'Contact not found';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_contact_call_mark(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.set_contact_call_mark(uuid, boolean) to authenticated;
 
 create or replace function public.complete_call_reminder(target_call_id uuid)
 returns void

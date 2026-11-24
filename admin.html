@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f2f2f2">
+    <title>Administração — Contactos</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body data-page="admin">
+    <main class="app">
+      <header class="topbar">
+        <a class="brand" href="admin.html" aria-label="Contactos, início">
+          <span class="brand-icon" aria-hidden="true">c</span>
+          <span>contactos</span>
+        </a>
+        <div class="header-actions">
+          <span class="topbar-label" id="account-email"></span>
+          <span class="role-badge admin-badge">Administrador</span>
+          <button class="text-button" id="sign-out" type="button">Sair</button>
+        </div>
+      </header>
+
+      <section class="intro admin-intro" aria-labelledby="admin-intro-label">
+        <p class="eyebrow" id="admin-intro-label">PAINEL DE ADMINISTRAÇÃO</p>
+      </section>
+
+      <section class="contacts-panel admin-panel" aria-labelledby="contacts-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="contacts-title">Lista de veteranos</h2>
+            <p id="contact-count" class="contact-count">A carregar…</p>
+          </div>
+          <button class="add-button" id="show-form" type="button"><span aria-hidden="true">+</span> Adicionar</button>
+        </div>
+        <label class="search-box" for="search">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.5 4.5"></path></svg>
+          <input id="search" type="search" placeholder="Procurar por nome ou número" autocomplete="off">
+        </label>
+        <form class="contact-form" id="contact-form" hidden>
+          <div class="form-heading">
+            <h3 id="contact-form-title">Novo contacto</h3>
+            <button type="button" class="close-form" id="hide-form" aria-label="Fechar formulário">×</button>
+          </div>
+          <input id="contact-id" type="hidden">
+          <label for="contact-name">Nome</label>
+          <input id="contact-name" name="name" type="text" placeholder="Ex.: Joana Silva" maxlength="60" required>
+          <label for="contact-phone">Número de telemóvel</label>
+          <input id="contact-phone" name="phone" type="tel" placeholder="Ex.: +351 912 345 678" maxlength="25" required>
+          <label for="contact-year">Ano</label>
+          <input id="contact-year" name="year" type="number" min="1" max="9999" step="1" placeholder="Ex.: 2020" required>
+          <p class="form-error" id="contact-form-error" role="alert" hidden></p>
+          <button class="save-button" type="submit">Guardar contacto</button>
+        </form>
+        <div class="contact-list" id="contact-list" aria-live="polite"></div>
+        <div class="empty-state" id="empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="16" r="8"></circle><path d="M9 41c1-8 7-13 15-13s14 5 15 13"></path><path d="M38 9v10m-5-5h10"></path></svg>
+          </span>
+          <h3>A lista começa aqui</h3>
+          <p>Adicione os contactos que quer partilhar com os utilizadores.</p>
+          <button class="empty-add" id="empty-add" type="button">Adicionar primeiro contacto <span aria-hidden="true">→</span></button>
+        </div>
+        <p class="no-results" id="no-results" hidden>Não encontrámos contactos com essa pesquisa.</p>
+        <p class="notice" id="page-notice" role="status" hidden></p>
+        <p class="form-error" id="page-error" role="alert" hidden></p>
+      </section>
+
+      <footer class="footer">
+        <span><span class="status-dot" aria-hidden="true"></span> As alterações são partilhadas com a organização</span>
+        <span>Simples assim.</span>
+      </footer>
+    </main>
+    <script src="supabase-config.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
